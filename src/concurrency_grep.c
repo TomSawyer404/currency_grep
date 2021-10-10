@@ -3,7 +3,7 @@
 // static void grep_run(char* file_pointer, char* pattern, u_int32_t file_size);
 static void grep_run(Config* my_config);
 static void* work_func(void* arg);
-static int kmp(const char* str, const char* pat);
+static int kmp(const char* str, const char* pat, int32_t* prefix_table);
 static int* build_prefix_table(const char* str_pat, int len_pat);
 static Config* config_new(char* file_pointer, char* pattern,
                           u_int32_t file_size);
@@ -34,8 +34,16 @@ static Config* config_new(char* fp, char* pattern, u_int32_t file_size) {
             return NULL;
         }
     }
-
     u_int32_t unit = file_size / cpu_num;
+
+    // Construct prefix_table for pattern
+    u_int32_t len_pattarn = strlen(pattern);
+    new_config->prefix_table = malloc(sizeof(int32_t) * len_pattarn);
+    if (NULL == new_config->prefix_table) {
+        perror("malloc() in config_new()");
+        return NULL;
+    }
+    new_config->prefix_table = build_prefix_table(pattern, len_pattarn);
 
     new_config->file_pointer = fp;
     new_config->pattern = pattern;
@@ -141,7 +149,7 @@ static void* work_func(void* arg) {
     char* eol = strchr(buffer, '\n');  // end of line
     *eol = '\0';
     while (eol) {
-        int index = kmp(sol, my_config->pattern);
+        int index = kmp(sol, my_config->pattern, my_config->prefix_table);
         // printf("%s%d%s ", RED, index, RESET);  // debug
         if (index != -1) {
             // fputs(sol, stdout);
@@ -192,7 +200,7 @@ static int* build_prefix_table(const char* str_pat, int len_pat) {
 
 /// Return first index of pattern in text.
 /// Return -1 if pattern not found.
-static int kmp(const char* text, const char* pattern) {
+static int kmp(const char* text, const char* pattern, int32_t* prefix_table) {
     int len_str = strlen(text);     // O(len_str)
     int len_pat = strlen(pattern);  // O(len_pat)
     if (len_pat > len_str) {
@@ -201,7 +209,7 @@ static int kmp(const char* text, const char* pattern) {
     }
 
     int index_text = 0, index_pattern = 0;
-    int* prefix_table = build_prefix_table(pattern, len_pat);  // Tm = O(?)
+    // int* prefix_table = build_prefix_table(pattern, len_pat);  // Tm = O(?)
     while (index_text < len_str && index_pattern < len_pat) {  // O(len_pat)
         if (text[index_text] == pattern[index_pattern]) {
             index_text += 1;

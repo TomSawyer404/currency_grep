@@ -14,6 +14,7 @@
 typedef struct config_st {
     char* file_pointer;
     char* pattern;
+    int32_t* prefix_table;
     u_int32_t cpu_num;
     u_int32_t file_size;
     u_int32_t unit;  // how many bytes are there in a basic chunk unit
