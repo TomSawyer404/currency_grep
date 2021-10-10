@@ -68,7 +68,7 @@ int grep_init(char** argv) {
     }
 
     // 2. Open a file and figure out how long is it
-    int fd = open(argv[2], O_RDONLY);
+    int fd = open(argv[2], O_RDWR);
     if (fd < 0) {
         perror("open()");
         return -1;
@@ -80,7 +80,8 @@ int grep_init(char** argv) {
     }
 
     // 3. Map file to process's address space
-    char* ret = mmap(NULL, file_stat_st.st_size, PROT_READ, MAP_SHARED, fd, 0);
+    char* ret = mmap(NULL, file_stat_st.st_size, PROT_READ | PROT_WRITE,
+                     MAP_SHARED, fd, 0);
     if (ret == MAP_FAILED) {
         perror("mmap()");
         return -1;
@@ -127,41 +128,23 @@ static void* work_func(void* arg) {
     // Search range: [ offset * uint, (offset+1) * unit ]
     u_int32_t unit = my_config->unit;
     u_int32_t start_offset = my_config->seq * unit;
-
     char* src = my_config->file_pointer + start_offset;
     char* dst = src + unit;
-    char* buffer = malloc(dst - src + 2);
-    if (NULL == buffer) {
-        perror("malloc() in search_func()");
-        pthread_exit(NULL);
-    }
-    memcpy(buffer, src, dst - src + 1);
-    buffer[dst - src + 1] = '\0';
 
-    // Search every line from buffer
-    char* line = malloc(1024);
-    if (NULL == line) {
-        perror("malloc() in search_func()");
-        pthread_exit(NULL);
-    }
-
-    char* sol = buffer;                // start of line
-    char* eol = strchr(buffer, '\n');  // end of line
-    *eol = '\0';
-    while (eol) {
-        int index = kmp(sol, my_config->pattern, my_config->prefix_table);
-        // printf("%s%d%s ", RED, index, RESET);  // debug
-        if (index != -1) {
-            // fputs(sol, stdout);
+    char* sol = src;                // start of line
+    char* eol = strchr(src, '\n');  // end of line
+    if (NULL != eol) *eol = '\0';
+    while (eol && eol <= dst && sol <= dst) {
+        if (-1 != kmp(sol, my_config->pattern, my_config->prefix_table)) {
             printf("%s\n", sol);
         }
 
+        *eol = '\n';
         sol = eol + 1;
         eol = strchr(sol, '\n');
         if (NULL != eol) *eol = '\0';
     }
 
-    free(buffer);
     pthread_exit(NULL);
 }
 
